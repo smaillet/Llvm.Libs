@@ -4,31 +4,33 @@
 function New-LlvmCmakeConfig(
     [string]$platform,
     [string]$config,
-    $VsInstance,
     [string]$baseBuild = (Join-Path (Get-Location) BuildOutput),
     [string]$srcRoot = (Join-Path (Get-Location) 'llvm\lib')
     )
 {
-    [CMakeConfig]$cmakeConfig = New-Object CMakeConfig -ArgumentList $platform, $config, $baseBuild, $srcRoot, $VsInstance
-    $cmakeConfig.CMakeBuildVariables = @{
-        LLVM_ENABLE_RTTI = "ON"
-        LLVM_BUILD_TOOLS = "OFF"
-        LLVM_BUILD_UTILS = "OFF"
-        LLVM_BUILD_DOCS = "OFF"
-        LLVM_BUILD_RUNTIME = "OFF"
-        LLVM_BUILD_RUNTIMES = "OFF"
-        LLVM_OPTIMIZED_TABLEGEN = "ON"
-        LLVM_REVERSE_ITERATION = "ON"
-        LLVM_TARGETS_TO_BUILD  = "all"
-        LLVM_INCLUDE_DOCS = "OFF"
-        LLVM_INCLUDE_EXAMPLES = "OFF"
-        LLVM_INCLUDE_GO_TESTS = "OFF"
-        LLVM_INCLUDE_RUNTIMES = "OFF"
-        LLVM_INCLUDE_TESTS = "OFF"
-        LLVM_INCLUDE_TOOLS = "OFF"
-        LLVM_INCLUDE_UTILS = "OFF"
-        LLVM_ADD_NATIVE_VISUALIZERS_TO_SOLUTION = "ON"
-    }
+    [CMakeConfig]$cmakeConfig = New-Object CMakeConfig -ArgumentList $platform, $config, $baseBuild, $srcRoot
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_ENABLE_RTTI', 'ON')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_TOOLS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_UTILS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_DOCS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_RUNTIME', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_RUNTIMES', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_TESTS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_EXAMPLES', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_BENCHMARKS','OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_LLVM_C_DYLIB','OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_BUILD_LLVM_DYLIB','OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_OPTIMIZED_TABLEGEN', 'ON')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_REVERSE_ITERATION', 'ON')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_TARGETS_TO_BUILD', 'all')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_DOCS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_EXAMPLES', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_GO_TESTS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_RUNTIMES', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_TESTS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_TOOLS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_INCLUDE_UTILS', 'OFF')
+    $cmakeConfig.CMakeBuildVariables.Add('LLVM_ADD_NATIVE_VISUALIZERS_TO_SOLUTION', 'ON')
     return $cmakeConfig
 }
 
@@ -39,11 +41,6 @@ function global:Get-LlvmVersion( [string] $cmakeListPath )
         %{ $_.Matches } |
         %{ $props.Add( $_.Groups[1].Value, [Convert]::ToInt32($_.Groups[2].Value) ) }
     return $props
-}
-
-function New-CMakeSettingsJson
-{
-    $global:RepoInfo.CMakeConfigurations.GetEnumerator() | New-CmakeSettings | Format-Json
 }
 
 function global:New-PathInfo([Parameter(Mandatory=$true)]$BasePath, [Parameter(Mandatory=$true, ValueFromPipeLine)]$Path)
@@ -65,57 +62,81 @@ function global:LinkFile($archiveVersionName, $info)
         md $linkPath | Out-Null
     }
 
+    Write-Verbose "Link: $linkPath => $($info.FullPath)"
     New-Item -ItemType HardLink -Path $linkPath -Name $info.FileName -Value $info.FullPath
 }
 
-function global:LinkPdb([Parameter(Mandatory=$true, ValueFromPipeLine)]$item, [Parameter(Mandatory=$true)]$Path)
+function global:LinkPdb([Parameter(Mandatory=$true, ValueFromPipeLine)]$item, [Parameter(Mandatory=$true)]$NewLinkDirectory)
 {
-    $targetPath = Join-Path $Path $item.Name
-    Write-Information "Linking $targetPath"
-    if(Test-Path -PathType Leaf $targetPath)
+    BEGIN
     {
-        Write-Information "Deleting existing PDB link"
-        del -Force $targetPath
     }
+    PROCESS
+    {
+        $newLinkPath = Join-Path $newLinkDirectory $item.Name
+        if(Test-Path -PathType Leaf $newLinkPath)
+        {
+            del -Force $newLinkPath
+        }
 
-    New-Item -ItemType HardLink -Path $Path -Name $item.Name -Value $item.FullName -ErrorAction Stop | Out-Null
+        Write-Verbose "Link: $linkPath => $($item.FullName)"
+        New-Item -ItemType HardLink -Path $newLinkDirectory -Name $item.Name -Value $item.FullName -ErrorAction Stop | Out-Null
+    }
+    END
+    {
+    }
 }
 
 function global:Create-ArchiveLayout($archiveVersionName)
 {
+    $ErrorActionPreference = 'Stop'
+    $InformationPreference = "Continue"
+
     # To simplify building the 7z archive with the desired structure
     # create the layout desired using hard-links, and zip the result in a single operation
     # this also allows local testing of the package without needing to publish, download and unpack the archive
     # while avoiding unnecessary file copies
     Write-Information "Creating ZIP structure hardlinks in $(Join-Path $global:RepoInfo.BuildOutputPath $archiveVersionName)"
     pushd $global:RepoInfo.BuildOutputPath
-    if(Test-Path -PathType Container $archiveVersionName)
+    try
     {
-        rd -Force -Recurse $archiveVersionName
+        if(Test-Path -PathType Container $archiveVersionName)
+        {
+            rd -Force -Recurse $archiveVersionName
+        }
+
+        md $archiveVersionName | Out-Null
+
+        ConvertTo-Json (Get-LlvmVersion (Join-Path $global:RepoInfo.LlvmRoot 'CMakeLists.txt')) | Out-File (Join-Path $archiveVersionName 'llvm-version.json')
+
+        $commonIncPath = join-Path $global:RepoInfo.LlvmRoot include
+        # Build chained pipeline of output files to hard-link into archive layout
+        & {
+            dir x64-Debug\lib -Filter LLVM*.lib | %{ New-PathInfo $global:RepoInfo.BuildOutputPath.FullName $_}
+            dir x64-Release\lib -Filter LLVM*.lib | %{ New-PathInfo $global:RepoInfo.BuildOutputPath.FullName $_}
+            dir -r x64*\include -Include ('*.h', '*.gen', '*.def', '*.inc')| %{ New-PathInfo $global:RepoInfo.BuildOutputPath.FullName $_}
+            dir -r $commonIncPath -Exclude ('*.txt')| ?{$_ -is [System.IO.FileInfo]} | %{ New-PathInfo $global:RepoInfo.LlvmRoot.FullName $_ }
+            dir $global:RepoInfo.RepoRoot -Filter Llvm-Libs.* | ?{$_ -is [System.IO.FileInfo]} | %{ New-PathInfo $global:RepoInfo.RepoRoot.FullName $_ }
+            dir (join-path $global:RepoInfo.LlvmRoot 'lib\ExecutionEngine\Orc\OrcCBindingsStack.h') | %{ New-PathInfo $global:RepoInfo.LlvmRoot.FullName $_ }
+        } | %{ LinkFile $archiveVersionName $_ } | Out-Null
+
+        # Link PDBs into the archive layout so that symbols are available.
+        # These don't use New-PathInfo as the target destination isn't the
+        # same relative path as the source location of the files.
+        dir -r x64-Release -Include LLVM*.pdb | LinkPdb -NewLinkDirectory (Join-Path $archiveVersionName 'x64-Release\lib')
+        dir -r x64-Debug -Include LLVM*.pdb | LinkPdb -NewLinkDirectory (Join-Path $archiveVersionName 'x64-Debug\lib')
     }
-
-    md $archiveVersionName | Out-Null
-
-    ConvertTo-Json (Get-LlvmVersion (Join-Path $global:RepoInfo.LlvmRoot 'CMakeLists.txt')) | Out-File (Join-Path $archiveVersionName 'llvm-version.json')
-
-    New-Item -ItemType Junction -Path (Join-path $archiveVersionName 'x64-Debug\Debug') -Name lib -Value (Join-Path $global:RepoInfo.BuildOutputPath 'x64-Debug\Debug\lib') | Out-Null
-    New-Item -ItemType Junction -Path (Join-path $archiveVersionName 'x64-Release\Release') -Name lib -Value (Join-Path $global:RepoInfo.BuildOutputPath 'x64-Release\RelWithDebInfo\lib') | Out-Null
-
-    $commonIncPath = join-Path $global:RepoInfo.LlvmRoot include
-    & {
-        dir -r x64*\include -Include ('*.h', '*.gen', '*.def', '*.inc')| %{ New-PathInfo $global:RepoInfo.BuildOutputPath.FullName $_}
-        dir -r $commonIncPath -Exclude ('*.txt')| ?{$_ -is [System.IO.FileInfo]} | %{ New-PathInfo $global:RepoInfo.LlvmRoot.FullName $_ }
-        dir $global:RepoInfo.RepoRoot -Filter Llvm-Libs.* | ?{$_ -is [System.IO.FileInfo]} | %{ New-PathInfo $global:RepoInfo.RepoRoot.FullName $_ }
-        dir (join-path $global:RepoInfo.LlvmRoot 'lib\ExecutionEngine\Orc\OrcCBindingsStack.h') | %{ New-PathInfo $global:RepoInfo.LlvmRoot.FullName $_ }
-    } | %{ LinkFile $archiveVersionName $_ } | Out-Null
-
-    # Link RelWithDebInfo PDBs into the 7z package so that symbols are available for the release build too.
-    $pdbLibDir = Join-Path $archiveVersionName 'x64-Release\Release\lib'
-    dir -r x64-Release\lib -Include *.pdb | LinkPdb -Path $pdbLibDir
+    finally
+    {
+        popd
+    }
 }
 
 function global:Compress-BuildOutput
 {
+    $ErrorActionPreference = 'Stop'
+    $InformationPreference = "Continue"
+
     if($env:APPVEYOR)
     {
         Write-Error "Cannot pack LLVM libraries in APPVEYOR build as it requires the built libraries and the total time required will exceed the limits of an APPVEYOR Job"
@@ -126,6 +147,7 @@ function global:Compress-BuildOutput
     $oldPath = $env:Path
     $archiveVersionName = "llvm-libs-$($global:RepoInfo.LlvmVersion)-msvc-$($global:RepoInfo.VsInstance.InstallationVersion.Major).$($global:RepoInfo.VsInstance.InstallationVersion.Minor)"
     $archivePath = Join-Path $global:RepoInfo.BuildOutputPath "$archiveVersionName.7z"
+    pushd $global:RepoInfo.BuildOutputPath
     try
     {
         Write-Information "Creating archive layout"
@@ -136,19 +158,13 @@ function global:Compress-BuildOutput
             del -Force $archivePath
         }
 
-        pushd $archiveVersionName
-        try
-        {
-            Write-Information "Creating 7-ZIP archive $archivePath"
-            7z.exe a $archivePath '*' -r -t7z -mx=9
-        }
-        finally
-        {
-            popd
-        }
+        Write-Information "Creating 7-ZIP archive $archivePath"
+        cd $archiveVersionName
+        7z.exe a $archivePath '*' -r -t7z -mx=9
     }
     finally
     {
+        popd
         $timer.Stop()
         $env:Path = $oldPath
         Write-Information "Pack Finished - Elapsed Time: $($timer.Elapsed.ToString())"
@@ -160,7 +176,6 @@ function global:Clear-BuildOutput()
     rd -Recurse -Force $global:RepoInfo.ToolsPath
     rd -Recurse -Force $global:RepoInfo.BuildOutputPath
     rd -Recurse -Force $global:RepoInfo.PackOutputPath
-    $global:RepoInfo = Get-RepoInfo
 }
 
 function global:Invoke-Build([switch]$GenerateOnly)
@@ -172,6 +187,9 @@ function global:Invoke-Build([switch]$GenerateOnly)
 .DESCRIPTION
     This script is used to build LLVM libraries
 #>
+    $ErrorActionPreference = 'Stop'
+    $InformationPreference = "Continue"
+
     if($env:APPVEYOR)
     {
         Write-Error "Cannot build LLVM libraries in APPVEYOR build as the total time required will exceed the limits of an APPVEYOR Job"
@@ -244,6 +262,18 @@ function global:Get-RepoInfo([switch]$Force)
         throw "No VisualStudio instance found! This build requires VS build tools to function"
     }
 
+    $vcToolsVersion = get-content (join-path $vsInstance.InstallationPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.v142.default.txt')
+    if([Environment]::Is64BitOperatingSystem)
+    {
+        $hostArch = 'x64'
+    }
+    else
+    {
+        $hostArch = 'x86'
+    }
+    $targetArch = 'x64'
+    $vcToolsPath = Join-Path $vsInstance.InstallationPath "VC\Tools\MSVC\$vcToolsVersion\bin\Host$hostArch\$targetArch"
+
     return @{
         RepoRoot = $repoRoot
         ToolsPath = $toolsPath
@@ -255,14 +285,26 @@ function global:Get-RepoInfo([switch]$Force)
         VsInstanceName = $vsInstance.DisplayName
         VsVersion = $vsInstance.InstallationVersion
         VsInstance = $vsInstance
-        CMakeConfigurations = @( (New-LlvmCmakeConfig x64 'Release' $vsInstance $buildOuputPath $llvmroot),
-                                 (New-LlvmCmakeConfig x64 'Debug' $vsInstance $buildOuputPath $llvmroot)
+        VCToolsVersion = $vcToolsVersion
+        VCToolsPath = $vcToolsPath
+        CMakeConfigurations = @( (New-LlvmCmakeConfig x64 'Release' $buildOuputPath $llvmroot),
+                                 (New-LlvmCmakeConfig x64 'Debug' $buildOuputPath $llvmroot)
                                )
     }
 }
 
 function Initialize-BuildEnvironment
 {
+    # Prevent re-running of this function from infinitely increasing the size of the path string
+    if($env:__PATH_BEFORE_INIT_ENVIRONMENT)
+    {
+        $env:Path = $env:__PATH_BEFORE_INIT_ENVIRONMENT
+    }
+    else
+    {
+        $env:__PATH_BEFORE_INIT_ENVIRONMENT = $env:Path
+    }
+
     $env:Path = "$($global:RepoInfo.ToolsPath);$env:Path"
     $isCI = !!$env:CI
 
@@ -276,14 +318,22 @@ function Initialize-BuildEnvironment
         $env:Path = "$($env:Path);$($msBuildInfo.BinPath)"
     }
 
-    $cmakePath = $(Join-Path $global:RepoInfo.VsInstance.InstallationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe')
-    if(!(Test-Path -PathType Leaf $cmakePath))
+    $cmakePath = $(Join-Path $global:RepoInfo.VsInstance.InstallationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin')
+    if(!(Test-Path -PathType Leaf (Join-Path $cmakePath 'cmake.exe')))
     {
         throw "CMAKE.EXE not found at: '$cmakePath'"
     }
 
     Write-Information "Using cmake from VS Instance"
-    $env:Path = "$([System.IO.Path]::GetDirectoryName($cmakePath));$env:Path"
+    $env:Path = "$cmakePath;$env:Path"
+
+    $ninjaPath = $(Join-Path $global:RepoInfo.VsInstance.InstallationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja')
+    if(!(Test-Path -PathType Leaf (join-path $ninjaPath 'ninja.exe')))
+    {
+        throw "CMAKE.EXE not found at: '$ninjaPath'"
+    }
+    $env:Path = "$ninjaPath;$env:Path"
+    Initialize-VCVars
 
     $vsGitCmdPath = [System.IO.Path]::Combine( $global:RepoInfo.VsInstance.InstallationPath, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'TeamFoundation', 'Team Explorer', 'Git', 'cmd')
     if(Test-Path -PathType Leaf ([System.IO.Path]::Combine($vsGitCmdPath, 'git.exe')))
@@ -303,6 +353,6 @@ $isCI = !!$env:CI -or !!$env:GITHUB_ACTIONS
 
 $global:RepoInfo = Get-RepoInfo -Force:$isCI
 
-New-Alias -Name build -Value Invoke-Build -Scope Global
-New-Alias -Name pack -Value Compress-BuildOutput -Scope Global
-New-Alias -Name clean -Value Clear-BuildOutput -Scope Global
+New-Alias -Name build -Value Invoke-Build -Scope Global -Force
+New-Alias -Name pack -Value Compress-BuildOutput -Scope Global -Force
+New-Alias -Name clean -Value Clear-BuildOutput -Scope Global -Force

@@ -30,7 +30,7 @@ two repositories are closely related and the static library and compiler version
 dependencies are manageable.
 
 ### Latest Download
-[![GitHub Releases (by Asset)](https://img.shields.io/github/downloads/UbiquityDotNet/Llvm.Libs/v6.0.1-msvc-15.8/llvm-libs-6.0.1-msvc-15.8.7z.svg)](https://github.com/UbiquityDotNET/Llvm.Libs/releases/download/v6.0.1-msvc-15.8/llvm-libs-6.0.1-msvc-15.8.7z)
+[![GitHub Releases (by Asset)](https://img.shields.io/github/downloads/UbiquityDotNet/Llvm.Libs/v10.0.0-msvc-16.5/llvm-libs-10.0.0-msvc-16.5.7z.svg)](https://github.com/UbiquityDotNET/Llvm.Libs/releases/download/v10.0.0-msvc-16.5/llvm-libs-10.0.0-msvc-16.5.7z)
 
 ## Building the 7-Zip packages locally
 ### Pre-requisites

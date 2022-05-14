@@ -327,16 +327,19 @@ function global:Invoke-MSBuild([string]$project, [hashtable]$properties, [string
     }
 }
 
-function global:Initialize-VCVars([switch]$Force, $vsInstance = ($RepoInfo.VsInstance))
+function global:Initialize-VCVars($vsInstance = ($RepoInfo.VsInstance))
 {
-    if($vsInstance)
+    if(!$env:__VSCMD_PREINIT_PATH)
     {
-        $vcEnv = Get-CmdEnvironment (Join-Path $vsInstance.InstallationPath 'VC\Auxiliary\Build\vcvarsall.bat') 'x86_amd64'
-        Merge-Environment $vcEnv @('Prompt')
-    }
-    else
-    {
-        Write-Error "VisualStudio instance not found"
+        if($vsInstance)
+        {
+            $vcEnv = Get-CmdEnvironment (Join-Path $vsInstance.InstallationPath 'VC\Auxiliary\Build\vcvarsall.bat') 'x86_amd64'
+            Merge-Environment $vcEnv @('Prompt')
+        }
+        else
+        {
+            Write-Error "VisualStudio instance not found"
+        }
     }
 }
 
