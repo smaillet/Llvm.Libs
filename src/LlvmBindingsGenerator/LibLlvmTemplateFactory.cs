@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 using CppSharp;
@@ -49,6 +50,8 @@ namespace LlvmBindingsGenerator
                 foreach( var handle in handles )
                 {
                     bool templatesFound = false;
+                    // Alias handles will have more than one template so loop through all entries of the lookup
+                    // and produce a template for each one.
                     foreach(IHandleCodeTemplate template in HandleToTemplateMap[handle.Name])
                     {
                         yield return new TemplateCodeGenerator( template.HandleName, options.HandleOutputPath, template );
@@ -60,6 +63,20 @@ namespace LlvmBindingsGenerator
                         // Generate an error for any handle types parsed from native headers not accounted for in the YAML configuration.
                         Diagnostics.Error( "No Mapping for handle type {0} - {1}@{2}", handle.Name, handle.TranslationUnit.FileRelativePath, handle.LineNumberStart );
                     }
+                }
+
+                // Produce the VTable code generators
+                foreach(var tu in bindingContext.ASTContext.GeneratedUnits())
+                {
+                    if(tu.IsExtensionHeader())
+                    {
+                        yield return new TemplateCodeGenerator(tu.FileNameWithoutExtension, Path.Combine(options.HandleOutputPath, "ABI", "libllvm-c"), new VTableTemplate(tu));
+                    }
+                    else if(tu.IsCoreHeader())
+                    {
+                        yield return new TemplateCodeGenerator(tu.FileNameWithoutExtension, Path.Combine(options.HandleOutputPath, "ABI", "llvm-c"), new VTableTemplate(tu));
+                    }
+                    // Other TU's ignored...
                 }
             }
 

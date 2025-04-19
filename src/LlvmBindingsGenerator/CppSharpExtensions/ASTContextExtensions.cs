@@ -76,17 +76,17 @@ namespace LlvmBindingsGenerator
 
         public static bool IsHandleTypeDef( this TypedefNameDecl td )
         {
-            return IsCannonicalHandleTypeDef( td ) || IsOpaquHandleTypeDef( td );
+            return IsCanonicalHandleTypeDef( td ) || IsOpaqueHandleTypeDef( td );
         }
 
-        public static bool IsOpaquHandleTypeDef( this TypedefNameDecl td )
+        public static bool IsOpaqueHandleTypeDef( this TypedefNameDecl td )
         {
             // bad form, declaration is the opaque struct, not a pointer to the struct
             return td.Type is TagType tt2 && tt2.IsOpaqueStruct();
         }
 
         [SuppressMessage( "Style", "IDE0046:Convert to conditional expression", Justification = "Result is anything but simplified!" )]
-        public static bool IsCannonicalHandleTypeDef( this TypedefNameDecl td )
+        public static bool IsCanonicalHandleTypeDef( this TypedefNameDecl td )
         {
             // Canonical form, declaration is a pointer to an opaque struct
             if( td.Type is not PointerType pt )
@@ -126,7 +126,7 @@ namespace LlvmBindingsGenerator
             return td.TryGetFunctionSignature( out _ );
         }
 
-        public static bool TryGetFunctionSignature( this TypedefNameDecl td, [MaybeNullWhen(false)] out FunctionType? signature )
+        public static bool TryGetFunctionSignature( this TypedefNameDecl td, [MaybeNullWhen(false)] out FunctionType signature )
         {
             signature = null;
             if( td.Type is PointerType pt && pt.Pointee is FunctionType sig )
@@ -143,10 +143,9 @@ namespace LlvmBindingsGenerator
             return ( td.Type is PointerType pt && pt.Pointee is FunctionType ft ) ? ft : null;
         }
 
-        public static IReadOnlyDictionary<string, FunctionType> GetFunctionPointers( this ASTContext context )
+        public static IReadOnlyDictionary<string, FunctionType> GetFunctionPointers( this TranslationUnit tu )
         {
-            return ( from tu in context.TranslationUnits
-                     from td in tu.Typedefs
+            return ( from td in tu.Typedefs
                      let ft = td.GetFunctionPointerType()
                      where ft != null
                      select (td.Name, Signature: ft)

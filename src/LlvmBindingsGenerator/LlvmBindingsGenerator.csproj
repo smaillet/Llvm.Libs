@@ -49,6 +49,11 @@
             <LastGenOutput>GlobalHandleTemplate.cs</LastGenOutput>
             <CustomToolNamespace>LlvmBindingsGenerator.Templates</CustomToolNamespace>
         </None>
+        <None Update="Templates\T4\VTableTemplate.tt">
+          <Generator>TextTemplatingFilePreprocessor</Generator>
+          <LastGenOutput>VTableTemplate.cs</LastGenOutput>
+          <CustomToolNamespace>LlvmBindingsGenerator.Templates</CustomToolNamespace>
+        </None>
     </ItemGroup>
 
     <ItemGroup>
@@ -66,6 +71,11 @@
             <DesignTime>True</DesignTime>
             <AutoGen>True</AutoGen>
             <DependentUpon>GlobalHandleTemplate.tt</DependentUpon>
+        </Compile>
+        <Compile Update="Templates\T4\VTableTemplate.cs">
+          <DesignTime>True</DesignTime>
+          <AutoGen>True</AutoGen>
+          <DependentUpon>VTableTemplate.tt</DependentUpon>
         </Compile>
     </ItemGroup>
 
